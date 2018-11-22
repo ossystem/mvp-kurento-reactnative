@@ -110,9 +110,32 @@ function negotiate() {
 }
 
 function start() {
+  let videoSourceId;
+  const isFront = true;
+  if (Platform.OS === 'ios') {
+    MediaStreamTrack.getSources(sourceInfos => {
+      console.log("sourceInfos: ", sourceInfos);
+
+      for (const i = 0; i < sourceInfos.length; i++) {
+        const sourceInfo = sourceInfos[i];
+        if(sourceInfo.kind == "video" && sourceInfo.facing == (isFront ? "front" : "back")) {
+          videoSourceId = sourceInfo.id;
+        }
+      }
+    });
+  }
+
   var constraints = {
     audio: false,
-    video: true,
+    video: {
+      mandatory: {
+        maxWidth: 240,
+        maxHeight: 320,
+        maxFrameRate: 24
+      },
+      facingMode: (isFront ? "user" : "environment"),
+      optional: (videoSourceId ? [{sourceId: videoSourceId}] : [])
+    },
   };
 
   getUserMedia(constraints, function (stream) {
