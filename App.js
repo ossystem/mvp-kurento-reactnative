@@ -10,7 +10,7 @@ import {
   Platform,
 } from 'react-native';
 
-const ws = new WebSocket('wss://pyrtc.ossystem.ua/ws')
+const ws = new WebSocket('wss://pyrtc-stage.ossystem.ua/ws')
 
 import {
   RTCPeerConnection,
@@ -25,7 +25,7 @@ import {
 const configuration = {"iceServers": [
   { urls: 'stun:stun.l.google.com:19302' },
   {
-    urls: 'turn:91.197.18.224:3478',
+    urls: 'turn:pyrtc-stage.ossystem.ua:3478',
     credential: 'password',
     username: 'username'
   }
@@ -116,7 +116,7 @@ function start() {
     MediaStreamTrack.getSources(sourceInfos => {
       console.log("sourceInfos: ", sourceInfos);
 
-      for (const i = 0; i < sourceInfos.length; i++) {
+      for (let i = 0; i < sourceInfos.length; i++) {
         const sourceInfo = sourceInfos[i];
         if(sourceInfo.kind == "video" && sourceInfo.facing == (isFront ? "front" : "back")) {
           videoSourceId = sourceInfo.id;
