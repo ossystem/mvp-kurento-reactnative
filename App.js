@@ -227,7 +227,6 @@ const styles = StyleSheet.create({
     borderColor: 'green',
   },
   box: {
-    backgroundColor: '#927412',
     height: 50,
     marginLeft:2,
     marginRight:2,
