@@ -39,6 +39,9 @@ pc.oniceconnectionstatechange = function() { console.log('iceconnectionstatechan
 pc.onsignalingstatechange = function() { console.log('signalingstatechange', pc.signalingState); };
 pc.onnegotiationneeded = function () { console.log('negotiationneeded'); };
 
+ws.onopen = function () {
+  start();
+}
 ws.onmessage =  function (e) {
     var message = JSON.parse(e.data);
     console.log('message', message);
@@ -170,7 +173,7 @@ export default class App extends Component{
   componentDidMount() {
     container = this;
 
-    start();
+    
   }
 
   render() {
