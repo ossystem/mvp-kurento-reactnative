@@ -132,9 +132,9 @@ function start() {
     audio: false,
     video: {
       mandatory: {
-        maxWidth: 240,
-        maxHeight: 320,
-        maxFrameRate: 24
+        maxWidth: 120,
+        maxHeight: 160,
+        maxFrameRate: 10
       },
       facingMode: (isFront ? "user" : "environment"),
       optional: (videoSourceId ? [{sourceId: videoSourceId}] : [])
