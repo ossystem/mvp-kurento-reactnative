@@ -9,157 +9,139 @@ import {
   Button,
   Platform,
 } from 'react-native';
+import { RTCView } from 'react-native-webrtc';
 
-const ws = new WebSocket('wss://pyrtc-stage.ossystem.ua/ws')
+import WebRtcPeer from 'react-native-kurento-utils';
 
-import {
-  RTCPeerConnection,
-  RTCMediaStream,
-  RTCIceCandidate,
-  RTCSessionDescription,
-  RTCView,
-  MediaStreamTrack,
-  getUserMedia,
-} from 'react-native-webrtc';
+const ws = new WebSocket('wss://kurento-stage.ossystem.ua/magicmirror')
+var videoInput;
+var videoOutput;
+var webRtcPeer;
+var state = null;
 
-const configuration = {"iceServers": [
-  { urls: 'stun:stun.l.google.com:19302' },
-  {
-    urls: 'turn:pyrtc-stage.ossystem.ua:3478',
-    credential: 'password',
-    username: 'username'
-  }
-]};
-
-let pc = new RTCPeerConnection(configuration);
-let localStream;
-
-pc.onicegatheringstatechange = function() { console.log('icegatheringstatechange', pc.iceGatheringState); };
-pc.oniceconnectionstatechange = function() { console.log('iceconnectionstatechange', pc.iceConnectionState); };
-pc.onsignalingstatechange = function() { console.log('signalingstatechange', pc.signalingState); };
-pc.onnegotiationneeded = function () { console.log('negotiationneeded'); };
+const I_CAN_START = 0;
+const I_CAN_STOP = 1;
+const I_AM_STARTING = 2;
 
 ws.onopen = function () {
   start();
 }
-ws.onmessage =  function (e) {
-    var message = JSON.parse(e.data);
-    console.log('message', message);
 
-    if (message.sdp) {
-        pc.setRemoteDescription(new RTCSessionDescription(message));
-    } else if (message.type == 'ping') {
-        // it's okay
-    } else if (message.type == 'ice') {
-        // it's okay
-    } else if (message.type == 'close') {
-        console.error('room is full. reload to try again');
-    } else if (message.type == 'renegotiate') {
-        negotiate();
-    } else {
-        console.error('do not know what to do with this message');
-    }
+ws.onmessage = function(message) {
+	var parsedMessage = JSON.parse(message.data);
+	console.info('Received message: ' + message.data);
+
+	switch (parsedMessage.id) {
+	case 'startResponse':
+		startResponse(parsedMessage);
+		break;
+	case 'error':
+		if (state == I_AM_STARTING) {
+			setState(I_CAN_START);
+		}
+		onError('Error message from server: ' + parsedMessage.message);
+		break;
+	case 'iceCandidate':
+		webRtcPeer.addIceCandidate(parsedMessage.candidate)
+		break;
+	default:
+		if (state == I_AM_STARTING) {
+			setState(I_CAN_START);
+		}
+		onError('Unrecognized message', parsedMessage);
+	}
 }
-
-pc.onicecandidate = function (e) {
-  console.log('icecandidate', e.candidate);
-  if (e.candidate) {
-      ws.send(JSON.stringify({ type: 'ice', ice: e.candidate }))
-  }
-};
-
-pc.onaddstream = function(e) {
-  console.log('addstream', e);
-  container.setState({ remoteViewSrc: e.stream.toURL() });
-};
-
-setInterval(function () {
-    ws.send(JSON.stringify({ type: 'ping' }))
-}, 5000)
-
-function negotiate() {
-  return pc.createOffer().then(function(offer) {
-      return pc.setLocalDescription(offer);
-  }).then(function() {
-    return new Promise(function(resolve) {
-      setTimeout(function () {
-        if (pc.iceGatheringState != 'complete') {
-          resolve();
-        };
-      }, 5000);
-
-      if (pc.iceGatheringState === 'complete') {
-        resolve();
-      } else {
-        function checkState() {
-          if (pc.iceGatheringState === 'complete') {
-            pc.removeEventListener('icegatheringstatechange', checkState);
-            resolve();
-          }
-        }
-        pc.addEventListener('icegatheringstatechange', checkState);
-      }
-    });
-  }).then(function() {
-    var offer = pc.localDescription;
-    console.log('offer', offer);
-    ws.send(JSON.stringify({
-      sdp: offer.sdp,
-      type: offer.type
-    }));
-  }).catch(function(e) {
-    alert(e);
-  });
-}
-
+var remoteVideo;
+var videoStream;
 function start() {
-  let videoSourceId;
-  const isFront = true;
-  if (Platform.OS === 'ios') {
-    MediaStreamTrack.getSources(sourceInfos => {
-      console.log("sourceInfos: ", sourceInfos);
+	console.log('Starting video call ...');
+	console.log('Creating WebRtcPeer and generating local sdp offer ...');
 
-      for (let i = 0; i < sourceInfos.length; i++) {
-        const sourceInfo = sourceInfos[i];
-        if(sourceInfo.kind == "video" && sourceInfo.facing == (isFront ? "front" : "back")) {
-          videoSourceId = sourceInfo.id;
-        }
-      }
-    });
-  }
-
-  var constraints = {
-    audio: false,
-    video: {
-      mandatory: {
-        maxWidth: 120,
-        maxHeight: 160,
-        maxFrameRate: 10
+    var options = {
+      videoStream: videoStream,
+      remoteVideo: remoteVideo,
+      onicecandidate : onIceCandidate,
+      onaddstream: function(e) {
+        container.setState({ remoteViewSrc: e.stream.toURL() });
       },
-      facingMode: (isFront ? "user" : "environment"),
-      optional: (videoSourceId ? [{sourceId: videoSourceId}] : [])
-    },
+      configuration: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          {
+            urls: 'turn:kurento-stage.ossystem.ua:3478',
+            credential: 'password',
+            username: 'username'
+          },
+        ]
+      },
+      mediaConstraints: {
+        audio: false,
+        video: {
+          mandatory: {
+            maxWidth: 480,
+            maxHeight: 640,
+            maxFrameRate: 10
+          },
+          facingMode: "user"
+        },
+      }
+    }
+
+    webRtcPeer = WebRtcPeer.WebRtcPeerSendrecv(options, function(error) {
+        if(error) return onError(error);
+        container.setState({ selfViewSrc: this.getLocalStream().toURL() });
+        this.generateOffer(onOffer);
+    });
+}
+function onIceCandidate(candidate) {
+  console.log('Local candidate' + JSON.stringify(candidate));
+
+  var message = {
+     id : 'onIceCandidate',
+     candidate : candidate
   };
+  sendMessage(message);
+}
 
-  getUserMedia(constraints, function (stream) {
-    console.log('getUserMedia success', stream);
-    container.setState({ selfViewSrc: stream.toURL() });
-    pc.addStream(stream);
+function onOffer(error, offerSdp) {
+	if(error) return onError(error);
 
-    return negotiate();
-  }, function(err) {
-      console.error('Could not acquire media: ' + err);
-  }).catch(function (err) {
-      console.error('Could not acquire media: ' + err);
-  });
+	console.info('Invoking SDP offer callback function ');
+	var message = {
+		id : 'start',
+		sdpOffer : offerSdp
+	}
+	sendMessage(message);
+}
+
+function onError(error) {
+	console.error(error);
 }
 
 
-function logError(error) {
-  console.log("logError", error);
+function startResponse(message) {
+	console.log('SDP answer received from server. Processing ...');
+	webRtcPeer.processAnswer(message.sdpAnswer);
 }
 
-let container;
+function stop() {
+	console.log('Stopping video call ...');
+	if (webRtcPeer) {
+		webRtcPeer.dispose();
+		webRtcPeer = null;
+
+		var message = {
+			id : 'stop'
+		}
+		sendMessage(message);
+	}
+}
+
+function sendMessage(message) {
+	var jsonMessage = JSON.stringify(message);
+	console.log('Senging message: ' + jsonMessage);
+	ws.send(jsonMessage);
+}
 
 export default class App extends Component{
   constructor(props) {
@@ -172,22 +154,9 @@ export default class App extends Component{
   }
   componentDidMount() {
     container = this;
-
-    
   }
 
   render() {
-    // return (
-    //   <View style={styles.container}>
-    //     <Text>Hello Amigo</Text>
-    //   </View>
-    // );
-    const transformEnable = function () {
-      ws.send(JSON.stringify({ type: 'transform_enable' }));
-    };
-    const transformDisable = function () {
-      ws.send(JSON.stringify({ type: 'transform_disable' }));
-    };
     return (
       <View style={styles.container}>
         <Image
@@ -204,28 +173,28 @@ export default class App extends Component{
         />
         <Text style={{ fontSize: 20 }} >OSSystem Demo</Text>
         <View style={{ flex: 0.2 }} />
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <View style={styles.box}>
-            <Button onPress={transformEnable} title="Enable transformation" />
-          </View>
-          <View style={{ flex: 1 }} />
-          <View style={styles.box}>
-            <Button style={styles.box} onPress={transformDisable} title="Disable transformation" />
-          </View>
-        </View>
-        <Text>local</Text>
-        <RTCView streamURL={this.state.selfViewSrc} style={styles.selfView}/>
         <Text>remote</Text>
         <RTCView streamURL={this.state.remoteViewSrc} style={styles.remoteView}/>
+        <RTCView streamURL={this.state.selfViewSrc} style={styles.floatView}/>
+        
       </View>
     );
   }
 }
 
 const styles = StyleSheet.create({
+  floatView: {
+    position: 'absolute',
+    width: 80,
+    height: 110,
+    bottom: 15,
+    right: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 15
+  },
   selfView: {
-    width: 200,
-    height: 150,
+    width: 150,
+    height: 110,
     borderWidth: 10,
     borderColor: 'green',
   },
@@ -236,10 +205,8 @@ const styles = StyleSheet.create({
     width:'40%',
   },
   remoteView: {
-    width: 200,
-    height: 150,
-    borderWidth: 10,
-    borderColor: 'red',
+    width: 400,
+    height: 300,
   },
   container: {
     flex: 1,
