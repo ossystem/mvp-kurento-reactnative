@@ -3,7 +3,8 @@ import {
   StyleSheet,
   Text,
   View,
-  TouchableOpacity
+  TouchableOpacity,
+  SafeAreaView
 } from 'react-native';
 import { RTCView } from 'react-native-webrtc';
 import WebRtcPeer from 'react-native-kurento-utils';
@@ -195,6 +196,7 @@ export default class AppMain extends Component{
 
   render() {
     return (
+      <SafeAreaView style={{flex: 1, backgroundColor: '#fff'}}>
         <View style={styles.container}>
           <RTCView streamURL={this.state.remoteViewSrc} style={styles.backgroundImage}>
             <View style={{flex: 1, flexDirection: 'row', alignItems: 'stretch', justifyContent: 'center'}}>
@@ -240,6 +242,7 @@ export default class AppMain extends Component{
             </View>
           </RTCView>        
         </View>
+      </SafeAreaView>
     );
   }
 }
@@ -314,6 +317,6 @@ const styles = StyleSheet.create({
     width: width,
     height: height,
     resizeMode: 'cover',
-    
+    backgroundColor: '#fff',
 }
 });
