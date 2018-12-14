@@ -34,8 +34,7 @@ function start() {
       },
       configuration: {
         iceServers: [
-          { urls: 'stun:stun.l.google.com:19302'
-           },
+          { urls: 'stun:stun.l.google.com:19302' },
           {
             urls: 'turn:kurento-stage.ossystem.ua:3478',
             credential: 'password',
@@ -136,7 +135,7 @@ function push() {
   }
   sendMessage(m);
 }
-let container;
+// let container;
 export default class AppMain extends Component{
   static onEnter = () => {
     ws = new WebSocket('wss://kurento-stage.ossystem.ua/magicmirror');
